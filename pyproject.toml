@@ -1,0 +1,20 @@
+[project]
+name = "image-reconstruct"
+version = "0.1.0"
+description = "image reconstruction toolkits"
+readme = "README.md"
+authors = [{ name = "sbchild", email = "sbchild0@gmail.com" }]
+requires-python = ">=3.14"
+dependencies = [
+    "numpy>=2.5.4",
+    "rawpy>=0.27.1",
+    "tifffile[codecs,xml,zarr]>=2026.10.15",
+]
+
+[project.scripts]
+recon = "recon:main"
+imgproc = "imgproc:main"
+
+[build-system]
+requires = ["uv_build>=0.12.24,<0.13.0"]
+build-backend = "uv_build"
