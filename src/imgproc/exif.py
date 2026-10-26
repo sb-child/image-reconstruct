@@ -1,45 +1,9 @@
 import tifffile
 from dataclasses import dataclass
-from typing import Optional
+from typing import Final, Optional
 
-# https://www.itu.int/itudoc/itu-t/com16/tiff-fx/docs/tiff6.pdf
-# TIFF Revision 6.0 Final — June 3, 1992
-# 第 15, 16 页
-(
-    BYTE,  # 8-bit unsigned integer.
-    ASCII,  # 8-bit byte that contains a 7-bit ASCII code; the last byte must be NUL (binary zero).
-    SHORT,  # 16-bit (2-byte) unsigned integer.
-    LONG,  # 32-bit (4-byte) unsigned integer.
-    RATIONAL,  # Two LONGs: the first represents the numerator of a fraction; the second, the denominator.
-    # --- TIFF 6.0 new
-    SBYTE,  # An 8-bit signed (twos-complement) integer.
-    UNDEFINED,  # An 8-bit byte that may contain anything, depending on the definition of the field.
-    SSHORT,  # A 16-bit (2-byte) signed (twos-complement) integer.
-    SLONG,  # A 32-bit (4-byte) signed (twos-complement) integer.
-    SRATIONAL,  # Two SLONG’s: the first represents the numerator of a fraction, the second the denominator.
-    FLOAT,  # Single precision (4-byte) IEEE format.
-    DOUBLE,  # Double precision (8-byte) IEEE format.
-    # ---
-    # https://gitlab.com/libtiff/libtiff/-/blob/master/libtiff/tiff.h?ref_type=heads#L160
-    # Warning: It is possible that other TIFF field types will be added in the future.
-    #          Readers should skip over fields containing an unexpected field type.
-) = range(1, 13)
-_SIZE = {
-    BYTE: 1,
-    ASCII: 1,
-    SHORT: 2,
-    LONG: 4,
-    RATIONAL: 8,
-    SBYTE: 1,
-    UNDEFINED: 1,
-    SSHORT: 2,
-    SLONG: 4,
-    SRATIONAL: 8,
-    FLOAT: 4,
-    DOUBLE: 8,
-}
+# Rationals
 _RATS = frozenset({tifffile.DATATYPE.RATIONAL, tifffile.DATATYPE.SRATIONAL})
-_INTS = frozenset({BYTE, UNDEFINED, SHORT, LONG, SBYTE, SSHORT, SLONG})
 
 # https://exiftool.org/TagNames/EXIF.html
 # https://helpx.adobe.com/content/dam/help/en/camera-raw/digital-negative/jcr_content/root/content/flex/items/position/position-par/download_section_733958301/download-1/DNG_Spec_1_7_1_0.pdf
@@ -76,6 +40,87 @@ T_SENSITIVITY_TYPE = 0x8830  # int16u SensitivityType
 T_SOS = 0x8831  # int32u StandardOutputSensitivity
 T_REI = 0x8832  # int32u RecommendedExposureIndex
 T_ISO_SPEED = 0x8833  # int32u
+# ---
+
+# 只包含 ExifIFD Tag
+_RATIONAL_TAGS = frozenset({T_EXPOSURE_TIME, T_FNUMBER, T_FOCAL_LENGTH, T_FP_XRES})
+
+# --- T_SENSITIVITY_TYPE 取值
+_SENSITIVITY_TYPE_ENC: Final[dict[tuple[bool, bool, bool], int]] = {
+    (False, False, False): 0,  # unknown
+    (True, False, False): 1,  # SOS
+    (False, True, False): 2,  # REI
+    (False, False, True): 3,  # ISO
+    (True, True, False): 4,  # SOS+REI
+    (True, False, True): 5,  # SOS+ISO
+    (False, True, True): 6,  # REI+ISO
+    (True, True, True): 7,  # SOS+REI+ISO
+}
+_SENSITIVITY_TYPE_DEC: Final[dict[int, tuple[bool, bool, bool]]] = {
+    v: k for k, v in _SENSITIVITY_TYPE_ENC.items()
+}
+_SENSITIVITY_TYPE_SHORT: Final[dict[int, str]] = {
+    0: "unknown",
+    1: "SOS",
+    2: "REI",
+    3: "ISO",
+    4: "SOS+REI",
+    5: "SOS+ISO",
+    6: "REI+ISO",
+    7: "SOS+REI+ISO",
+}
+
+
+# frozen 实现 __hash__
+# slots 实现 __slots__
+@dataclass(frozen=True, slots=True)
+class SensitivityType:
+    # Standard Output Sensitivity (T_SOS)
+    sos: bool
+    # Recommended Exposure Index (T_REI)
+    rei: bool
+    # ISO Speed (T_ISO_SPEED)
+    iso: bool
+
+    @property
+    def code(self) -> int:
+        return _SENSITIVITY_TYPE_ENC[(self.sos, self.rei, self.iso)]
+
+    @classmethod
+    def from_code(cls, i: int) -> SensitivityType:
+        try:
+            return cls(*_SENSITIVITY_TYPE_DEC[i])
+        except KeyError:
+            raise ValueError(f"预期 0..=7, 输入 {i}") from None
+
+    @property
+    def anchored(self) -> bool:
+        """是否含物理锚点"""
+        return self.sos or self.iso
+
+    @property
+    def tags(self) -> tuple[int, ...]:
+        return tuple(
+            t
+            for flag, t in (
+                (self.sos, T_SOS),
+                (self.rei, T_REI),
+                (self.iso, T_ISO_SPEED),
+            )
+            if flag
+        )
+
+    def __str__(self) -> str:
+        return _SENSITIVITY_TYPE_SHORT[self.code]
+
+
+def to_sensitivity_type(i: int) -> SensitivityType:
+    sos = i == 1 or i == 4 or i == 5 or i == 7
+    rei = i == 2 or i == 4 or i == 6 or i == 7
+    iso = i == 3 or i == 5 or i == 6 or i == 7
+    return SensitivityType(sos, rei, iso)
+
+
 # ---
 
 
