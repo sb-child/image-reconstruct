@@ -39,7 +39,7 @@ sudo dnf install -y \
     openblas-devel
 ```
 
-_具体参考 <https://colmap.github.io/install.html#build-from-source>_
+_这里只介绍在 Fedora 下构建无 CUDA 版本。更多信息看[这里](https://colmap.github.io/install.html#build-from-source)。_
 
 克隆 COLMAP 仓库:
 
@@ -59,7 +59,7 @@ cd build
 cmake .. -GNinja
 ```
 
-用 ninja 构建，要耗费一些时间:
+用 ninja 构建，要耗费一些时间，**不需要**`ninja install`:
 
 ```sh
 # colmap/build/
@@ -89,4 +89,4 @@ bin = "/home/sbchild/colmap/build/src/colmap/exe/colmap"
 
 ## 注意事项
 
-- [LibRaw](https://github.com/LibRaw/LibRaw) 没法处理擦掉 EXIF 信息的 ORF 图像，预期会爆炸。
+- [LibRaw](https://github.com/LibRaw/LibRaw) 没法处理擦掉 EXIF 信息的 ORF(Olympus格式) 图像，预期会爆炸。
