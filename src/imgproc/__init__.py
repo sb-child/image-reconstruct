@@ -14,9 +14,10 @@ from . import exif
 def main() -> None:
     # print("Hello from imgproc!")
     # colmap.run([])
-    open_file()
-    # bp = Path("/home/sbchild/下载").resolve()
-    # batch_raw.process(bp)
+    # open_file()
+    bp = Path("/run/media/sbchild/Ventoy/camera").resolve()
+    for r in batch_raw.process(bp):
+        print(r)
 
 
 # def probe(path, chunk=1 << 16):
