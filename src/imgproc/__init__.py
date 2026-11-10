@@ -1,19 +1,20 @@
 import os
 import numpy as np
 import rawpy
-from rawpy import ColorSpace  # pyright: ignore[reportPrivateImportUsage]
+from rawpy import ColorSpace
 from pathlib import Path
 
 import tifffile
 from image_reconstruct import colmap
 from . import batch_raw
 from . import wb
+from . import exif
 
 
 def main() -> None:
     # print("Hello from imgproc!")
     # colmap.run([])
-    open_file2()
+    open_file()
     # bp = Path("/home/sbchild/下载").resolve()
     # batch_raw.process(bp)
 
@@ -94,53 +95,57 @@ def open_file():
     # bp = Path("/tmp").resolve()
     # bp = Path("/home/sbchild/下载/我的奶").resolve()
 
-    CFGS = {
-        "A 默认(0.75)": dict(adjust_maximum_thr=0.75),
-        "B thr=0": dict(adjust_maximum_thr=0.0),
-        "C thr=0, no_scale": dict(adjust_maximum_thr=0.0, no_auto_scale=True),
-    }
-    RES: dict[str, dict[str, tuple[float, float]]] = {}
-    for name, cfg in CFGS.items():
-        per: dict[str, tuple[float, float]] = {}
-        for i in bp.glob("*.dng", case_sensitive=False):
-            with rawpy.imread(str(i)) as raw:
-                o = raw.other
-                print(
-                    "shutter_speed:",
-                    o.shutter_speed,
-                    "aperture:",
-                    o.aperture,
-                    "iso_speed:",
-                    o.iso_speed,
-                )
-                calc_wb = list(wb.norm_white_balance(raw.camera_whitebalance))
-                img = raw.postprocess(
-                    user_wb=calc_wb,
-                    no_auto_bright=True,
-                    gamma=(1, 1),
-                    output_bps=16,
-                    output_color=ColorSpace.sRGB,
-                    **cfg,  # pyright: ignore[reportArgumentType]
-                )
-            # 零额外内存；float64 累加避免 3600 万像素的 float32 求和误差
-            per[i.name] = (img.mean(dtype=np.float64) / 65535.0, img.max() / 65535.0)
-            print(
-                f"--- {name} {i.name} "
-                f"mean={per[i.name][0]:.8f} peak={per[i.name][1]:.5f}"
-            )
-        RES[name] = per
-    # ================= 配对比较 =================
-    names = list(CFGS)
-    base = names[0]
-    common = sorted(set.intersection(*(set(RES[n]) for n in names)))
-    print(f"\n共有 {len(common)} 张，基准 = {base}\n")
-    for name in names[1:]:
-        r = np.array([RES[name][k][0] / RES[base][k][0] for k in common])
-        pk = np.array([RES[base][k][1] for k in common])
-        print(f"{name:18s} vs {base}")
-        print(
-            f"  r: median={np.median(r):.5f}  "
-            f"CV={r.std(ddof=0) / r.mean() * 100:6.2f}%  "
-            f"span={r.max() / r.min():6.2f}"
-        )
-        print(f"  corr(r, peak) = {np.corrcoef(pk, r)[0, 1]:+.3f}")
+    for i in bp.glob("*.dng", case_sensitive=False):
+        tf = tifffile.TiffFile(i)
+        e = exif.from_file(tf)
+        print(e, e.valid, e.brightness)
+    # CFGS = {
+    #     "A 默认(0.75)": dict(adjust_maximum_thr=0.75),
+    #     "B thr=0": dict(adjust_maximum_thr=0.0),
+    #     "C thr=0, no_scale": dict(adjust_maximum_thr=0.0, no_auto_scale=True),
+    # }
+    # RES: dict[str, dict[str, tuple[float, float]]] = {}
+    # for name, cfg in CFGS.items():
+    #     per: dict[str, tuple[float, float]] = {}
+    #     for i in bp.glob("*.dng", case_sensitive=False):
+    #         with rawpy.imread(str(i)) as raw:
+    #             o = raw.other
+    #             print(
+    #                 "shutter_speed:",
+    #                 o.shutter_speed,
+    #                 "aperture:",
+    #                 o.aperture,
+    #                 "iso_speed:",
+    #                 o.iso_speed,
+    #             )
+    #             calc_wb = list(wb.norm_white_balance(raw.camera_whitebalance))
+    #             img = raw.postprocess(
+    #                 user_wb=calc_wb,
+    #                 no_auto_bright=True,
+    #                 gamma=(1, 1),
+    #                 output_bps=16,
+    #                 output_color=ColorSpace.sRGB,
+    #                 **cfg,  # pyright: ignore[reportArgumentType]
+    #             )
+    #         # 零额外内存；float64 累加避免 3600 万像素的 float32 求和误差
+    #         per[i.name] = (img.mean(dtype=np.float64) / 65535.0, img.max() / 65535.0)
+    #         print(
+    #             f"--- {name} {i.name} "
+    #             f"mean={per[i.name][0]:.8f} peak={per[i.name][1]:.5f}"
+    #         )
+    #     RES[name] = per
+    # # ================= 配对比较 =================
+    # names = list(CFGS)
+    # base = names[0]
+    # common = sorted(set.intersection(*(set(RES[n]) for n in names)))
+    # print(f"\n共有 {len(common)} 张，基准 = {base}\n")
+    # for name in names[1:]:
+    #     r = np.array([RES[name][k][0] / RES[base][k][0] for k in common])
+    #     pk = np.array([RES[base][k][1] for k in common])
+    #     print(f"{name:18s} vs {base}")
+    #     print(
+    #         f"  r: median={np.median(r):.5f}  "
+    #         f"CV={r.std(ddof=0) / r.mean() * 100:6.2f}%  "
+    #         f"span={r.max() / r.min():6.2f}"
+    #     )
+    #     print(f"  corr(r, peak) = {np.corrcoef(pk, r)[0, 1]:+.3f}")
